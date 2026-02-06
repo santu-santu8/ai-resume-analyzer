@@ -15,3 +15,4 @@ try:
     print("✅ Created user UID:", user.uid)
 except Exception as e:
     print("❌ Error:", e)
+
