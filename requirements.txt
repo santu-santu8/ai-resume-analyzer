@@ -10,3 +10,4 @@ firebase-admin
 openai
 python-dotenv
 Pillow
+pyrebase4
