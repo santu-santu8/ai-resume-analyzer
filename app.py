@@ -1,80 +1,60 @@
 import streamlit as st
 from datetime import datetime
 from firebase_init import init_firebase
-
 from utils.auth import signup_user, login_user
 from utils.ats_score import calculate_ats
 from utils.ai_suggestions import ai_feedback
 from utils.resume_rewrite import rewrite_resume
 
-# --------------------------------------------------
-# PAGE CONFIG
-# --------------------------------------------------
+# ------------------- PAGE -------------------
 st.set_page_config(page_title="AI Resume Analyzer", layout="centered")
 st.title("📄 AI Resume Analyzer")
 
-# --------------------------------------------------
-# INIT FIREBASE (FIRESTORE)
-# --------------------------------------------------
+# ------------------- FIRESTORE -------------------
 db = init_firebase()
 
-# --------------------------------------------------
-# SESSION STATE
-# --------------------------------------------------
+# ------------------- SESSION STATE -------------------
 if "user" not in st.session_state:
     st.session_state.user = None
 if "uid" not in st.session_state:
     st.session_state.uid = None
 
-# ==================================================
-# 🔐 LOGIN / SIGNUP
-# ==================================================
+# ------------------- AUTH -------------------
 if st.session_state.user is None:
     st.subheader("🔐 Authentication")
-
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
 
-    # ---------------- LOGIN ----------------
+    # -------- LOGIN --------
     with tab1:
         email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
 
         if st.button("Login"):
-            result = login_user(email)
-
+            result = login_user(email, password)
             if result["success"]:
-                st.session_state.user = result["name"]
+                st.session_state.user = email
                 st.session_state.uid = result["uid"]
-                st.success(f"Welcome {result['name']}")
+                st.success(f"Welcome {email}")
                 st.rerun()
             else:
                 st.error(result["error"])
 
-    # ---------------- SIGN UP ----------------
+    # -------- SIGN UP --------
     with tab2:
         name = st.text_input("Name")
         new_email = st.text_input("New Email")
         password = st.text_input("Password", type="password")
 
         if st.button("Sign Up"):
-            result = signup_user(new_email, password, name)
-
+            result = signup_user(new_email, password)
             if result["success"]:
-                # Save user profile to Firestore
-                db.collection("users").document(result["uid"]).set({
-                    "name": name,
-                    "email": new_email,
-                    "created_at": datetime.utcnow()
-                })
-
                 st.success("Account created successfully. Please login.")
             else:
                 st.error(result["error"])
 
     st.stop()
 
-# ==================================================
-# LOGGED-IN USER
-# ==================================================
+# ------------------- LOGGED-IN USER -------------------
 st.success(f"Logged in as {st.session_state.user}")
 
 if st.button("Logout"):
@@ -84,9 +64,7 @@ if st.button("Logout"):
 
 st.divider()
 
-# ==================================================
-# 🔀 BRANCH → ROLE → SKILLS
-# ==================================================
+# ------------------- BRANCH → ROLE → SKILLS -------------------
 BRANCH_ROLE_SKILLS = {
     "CSE": {
         "Python Developer": ["python", "oops", "git", "api", "django"],
@@ -103,17 +81,11 @@ BRANCH_ROLE_SKILLS = {
     }
 }
 
-# --------------------------------------------------
-# SELECTIONS
-# --------------------------------------------------
 branch = st.selectbox("Select Branch", BRANCH_ROLE_SKILLS.keys())
 role = st.selectbox("Select Job Role", BRANCH_ROLE_SKILLS[branch].keys())
-
 resume = st.file_uploader("Upload Resume (PDF or TXT)", type=["pdf", "txt"])
 
-# ==================================================
-# ANALYZE RESUME
-# ==================================================
+# ------------------- ANALYZE RESUME -------------------
 if st.button("Analyze Resume"):
     if resume is None:
         st.error("❌ Please upload a resume")
@@ -127,7 +99,6 @@ if st.button("Analyze Resume"):
         required_skills
     )
 
-    # ---------------- RESULTS ----------------
     st.subheader("📊 ATS Result")
     st.metric("ATS Score", f"{ats}%")
     st.write("Level:", level)
@@ -138,16 +109,13 @@ if st.button("Analyze Resume"):
     st.error("❌ Missing Skills")
     st.write(missing if missing else "None")
 
-    # ---------------- AI FEEDBACK ----------------
     st.subheader("🤖 AI Suggestions")
     st.markdown(ai_feedback(role, level, missing))
 
     st.subheader("✍ Resume Rewrite")
     st.markdown(rewrite_resume(role, missing))
 
-    # --------------------------------------------------
-    # 💾 SAVE ATS RESULT TO FIRESTORE
-    # --------------------------------------------------
+    # Save ATS Result
     db.collection("ats_results").add({
         "uid": st.session_state.uid,
         "name": st.session_state.user,
@@ -159,5 +127,4 @@ if st.button("Analyze Resume"):
         "missing_skills": missing,
         "created_at": datetime.utcnow()
     })
-
     st.success("📁 Results saved to Firebase")
