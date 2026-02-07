@@ -5,6 +5,9 @@ config = {
     "apiKey": os.getenv("FIREBASE_API_KEY"),
     "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
     "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+
+    # 🔴 REQUIRED BY PYREBASE (even if unused)
+    "databaseURL": "https://dummy.firebaseio.com",
 }
 
 firebase = pyrebase.initialize_app(config)
