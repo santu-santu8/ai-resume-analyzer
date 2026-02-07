@@ -1,119 +1,165 @@
 import streamlit as st
 
-from firebase_init import init_firebase
 from utils.auth import login_user, signup_user
-from utils.ats_score import calculate_ats, BRANCH_DATA
+from utils.resume_reader import read_resume
+from utils.ats_score import calculate_ats
 from utils.ai_suggestions import ai_feedback
 from utils.roadmap import generate_roadmap
+from utils.resume_rewrite import rewrite_resume
+
+st.set_page_config(page_title="AI Resume Analyzer", layout="centered")
 
 # --------------------------------------------------
-# Page config
+# BRANCH + ROLE DATA (INDUSTRY RELEVANT)
 # --------------------------------------------------
-st.set_page_config(page_title="AI Resume Analyzer", page_icon="📄")
+BRANCH_DATA = {
+    "Computer Science / IT": {
+        "roles": {
+            "Python Developer": ["python", "oops", "git", "api", "django"],
+            "Java Developer": ["java", "oops", "spring", "hibernate", "sql"],
+            "Full Stack Developer": ["html", "css", "javascript", "react", "api"],
+            "Data Scientist": ["python", "statistics", "machine learning", "pandas", "sql"],
+        }
+    },
+    "Electronics / ECE": {
+        "roles": {
+            "Embedded Engineer": ["c", "c++", "microcontroller", "rtos", "embedded"],
+            "VLSI Engineer": ["verilog", "vlsi", "asic", "fpga"],
+        }
+    },
+    "Mechanical": {
+        "roles": {
+            "Design Engineer": ["autocad", "solidworks", "catia"],
+            "Manufacturing Engineer": ["cnc", "lean", "six sigma"],
+        }
+    },
+    "Civil": {
+        "roles": {
+            "Site Engineer": ["construction", "estimation", "autocad"],
+            "Structural Engineer": ["staad", "etabs", "structural analysis"],
+        }
+    },
+}
 
 # --------------------------------------------------
-# Firebase init
+# SESSION STATE
 # --------------------------------------------------
-db = init_firebase()
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user_email = ""
 
 # --------------------------------------------------
-# Session state
-# --------------------------------------------------
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-# --------------------------------------------------
-# AUTH UI
+# AUTHENTICATION UI
 # --------------------------------------------------
 st.title("📄 AI Resume Analyzer")
 st.subheader("🔐 Authentication")
 
-tab1, tab2 = st.tabs(["Login", "Sign Up"])
+auth_tab = st.radio("Choose", ["Login", "Sign Up"])
 
-with tab1:
-    login_email = st.text_input("Email", key="login_email")
-    login_password = st.text_input("Password", type="password", key="login_password")
+if not st.session_state.logged_in:
+    if auth_tab == "Login":
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_pass")
 
-    if st.button("Login"):
-        try:
-            ok, res = login_user(login_email, login_password)
+        if st.button("Login"):
+            ok, res = login_user(email, password)
             if ok:
-                st.session_state.user = login_email
-                st.success(f"Welcome back, {login_email}")
-                st.rerun()
+                st.session_state.logged_in = True
+                st.session_state.user_email = email
+                st.success(f"Welcome back, {email}")
+                st.experimental_rerun()
             else:
                 st.error(res)
-        except Exception as e:
-            st.error(str(e))
 
-with tab2:
-    signup_name = st.text_input("Name", key="signup_name")
-    signup_email = st.text_input("New Email", key="signup_email")
-    signup_password = st.text_input(
-        "Password", type="password", key="signup_password"
+    else:
+        name = st.text_input("Name", key="signup_name")
+        email = st.text_input("New Email", key="signup_email")
+        password = st.text_input("Password", type="password", key="signup_pass")
+
+        if st.button("Sign Up"):
+            ok, res = signup_user(name, email, password)
+            if ok:
+                st.success("Account created. Please login.")
+            else:
+                st.error(res)
+
+# --------------------------------------------------
+# MAIN APP (AFTER LOGIN)
+# --------------------------------------------------
+if st.session_state.logged_in:
+    st.success(f"Logged in as {st.session_state.user_email}")
+
+    st.divider()
+
+    # -----------------------------
+    # STEP 1: BRANCH
+    # -----------------------------
+    branch = st.selectbox(
+        "🎓 Select Branch",
+        list(BRANCH_DATA.keys())
     )
 
-    if st.button("Sign Up"):
-        try:
-            ok, res = signup_user(signup_name, signup_email, signup_password)
-            if ok:
-                st.success("Account created! Please login.")
-            else:
-                st.error(res)
-        except Exception as e:
-            st.error(str(e))
+    # -----------------------------
+    # STEP 2: ROLE
+    # -----------------------------
+    role = st.selectbox(
+        "💼 Select Job Role",
+        list(BRANCH_DATA[branch]["roles"].keys())
+    )
 
-# --------------------------------------------------
-# STOP if not logged in
-# --------------------------------------------------
-if not st.session_state.user:
-    st.stop()
+    required_skills = BRANCH_DATA[branch]["roles"][role]
 
-# --------------------------------------------------
-# MAIN APP
-# --------------------------------------------------
-st.success(f"Logged in as {st.session_state.user}")
-st.divider()
+    # -----------------------------
+    # STEP 3: RESUME UPLOAD
+    # -----------------------------
+    st.subheader("📄 Upload Resume")
 
-st.header("📊 Resume Analysis")
+    resume_file = st.file_uploader(
+        "Upload your resume (PDF only)",
+        type=["pdf"]
+    )
 
-# Select branch
-branch = st.selectbox("Select Branch", list(BRANCH_DATA.keys()))
+    if resume_file:
+        resume_text = read_resume(resume_file)
+        st.success("Resume uploaded successfully")
 
-# Select role based on branch
-role = st.selectbox("Select Role", list(BRANCH_DATA[branch].keys()))
+    # -----------------------------
+    # ANALYZE
+    # -----------------------------
+    if st.button("Analyze Resume"):
+        if not resume_file:
+            st.error("Please upload a resume first")
+            st.stop()
 
-# Resume input
-resume_text = st.text_area(
-    "Paste your resume content here",
-    height=250,
-    placeholder="Paste your resume text here..."
-)
-
-# --------------------------------------------------
-# Analyze
-# --------------------------------------------------
-if st.button("Analyze Resume"):
-    if not resume_text.strip():
-        st.warning("Please paste your resume text.")
-    else:
-        ats_score, missing_skills, level = calculate_ats(
-            resume_text, branch, role
+        ats, level, matched, missing = calculate_ats(
+            resume_text,
+            required_skills
         )
 
-        st.subheader("✅ ATS Result")
-        st.write(f"**ATS Score:** {ats_score}%")
-        st.write(f"**Level:** {level}")
+        st.divider()
+        st.subheader("📊 ATS Result")
 
-        st.subheader("🧠 AI Feedback")
-        feedback = ai_feedback(role, level, missing_skills)
-        st.markdown(feedback)
+        st.metric("ATS Score", f"{ats}%")
+        st.write("Level:", level)
 
-        st.subheader("🛣️ Learning Roadmap")
-        roadmap = generate_roadmap(missing_skills)
+        st.success(f"Matched Skills: {', '.join(matched) if matched else 'None'}")
+        st.error(f"Missing Skills: {', '.join(missing) if missing else 'None'}")
 
-        if roadmap:
-            for step in roadmap:
-                st.write("•", step)
-        else:
-            st.success("Great! No major skill gaps found 🎉")
+        # -----------------------------
+        # AI FEEDBACK
+        # -----------------------------
+        st.subheader("🤖 AI Feedback")
+        st.markdown(ai_feedback(role, level, missing))
+
+        # -----------------------------
+        # ROADMAP
+        # -----------------------------
+        st.subheader("🛣️ Improvement Roadmap")
+        for step in generate_roadmap(missing):
+            st.write("•", step)
+
+        # -----------------------------
+        # RESUME REWRITE
+        # -----------------------------
+        st.subheader("✍ Resume Rewrite Suggestions")
+        st.markdown(rewrite_resume(role, missing))
