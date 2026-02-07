@@ -3,11 +3,12 @@ import os
 
 config = {
     "apiKey": os.getenv("FIREBASE_API_KEY"),
-    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+    "authDomain": f"{os.getenv('FIREBASE_PROJECT_ID')}.firebaseapp.com",
     "projectId": os.getenv("FIREBASE_PROJECT_ID"),
 
     # 🔴 REQUIRED BY PYREBASE (even if unused)
     "databaseURL": "https://dummy.firebaseio.com",
+    "storageBucket": f"{os.getenv('FIREBASE_PROJECT_ID')}.appspot.com",
 }
 
 firebase = pyrebase.initialize_app(config)
