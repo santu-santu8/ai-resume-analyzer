@@ -1,130 +1,73 @@
 import streamlit as st
-from datetime import datetime
-from firebase_init import init_firebase
-from utils.auth import signup_user, login_user
-from utils.ats_score import calculate_ats
-from utils.ai_suggestions import ai_feedback
-from utils.resume_rewrite import rewrite_resume
+import firebase_admin
+from firebase_admin import credentials, auth, firestore
+import os
 
-# ------------------- PAGE -------------------
-st.set_page_config(page_title="AI Resume Analyzer", layout="centered")
-st.title("📄 AI Resume Analyzer")
+# ---------------- FIREBASE INIT ---------------- #
+def init_firebase():
+    if not firebase_admin._apps:
+        cred = credentials.Certificate({
+            "type": os.getenv("FIREBASE_TYPE"),
+            "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+            "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+            "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n"),
+            "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+            "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+            "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
+            "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
+            "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_CERT_URL"),
+            "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_CERT_URL"),
+        })
+        firebase_admin.initialize_app(cred)
 
-# ------------------- FIRESTORE -------------------
+    return firestore.client()
+
+
 db = init_firebase()
 
-# ------------------- SESSION STATE -------------------
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "uid" not in st.session_state:
-    st.session_state.uid = None
+# ---------------- UI ---------------- #
+st.set_page_config(page_title="AI Resume Analyzer", layout="centered")
+st.title("📄 AI Resume Analyzer")
+st.subheader("🔐 Authentication")
 
-# ------------------- AUTH -------------------
-if st.session_state.user is None:
-    st.subheader("🔐 Authentication")
-    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+tab1, tab2 = st.tabs(["Login", "Sign Up"])
 
-    # -------- LOGIN --------
-    with tab1:
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
+# ---------------- LOGIN ---------------- #
+with tab1:
+    login_email = st.text_input("Email", key="login_email")
+    login_password = st.text_input("Password", type="password", key="login_password")
 
-        if st.button("Login"):
-            result = login_user(email, password)
-            if result["success"]:
-                st.session_state.user = email
-                st.session_state.uid = result["uid"]
-                st.success(f"Welcome {email}")
-                st.rerun()
-            else:
-                st.error(result["error"])
+    if st.button("Login"):
+        try:
+            user = auth.get_user_by_email(login_email)
+            st.success(f"Welcome back, {user.email}")
+            st.session_state["user"] = user.email
+        except Exception as e:
+            st.error("User not found. Please sign up first.")
 
-    # -------- SIGN UP --------
-    with tab2:
-        name = st.text_input("Name")
-        new_email = st.text_input("New Email")
-        password = st.text_input("Password", type="password")
+# ---------------- SIGNUP ---------------- #
+with tab2:
+    signup_name = st.text_input("Name", key="signup_name")
+    signup_email = st.text_input("New Email", key="signup_email")
+    signup_password = st.text_input("Password", type="password", key="signup_password")
 
-        if st.button("Sign Up"):
-            result = signup_user(new_email, password)
-            if result["success"]:
-                st.success("Account created successfully. Please login.")
-            else:
-                st.error(result["error"])
+    if st.button("Sign Up"):
+        try:
+            user = auth.create_user(
+                email=signup_email,
+                password=signup_password
+            )
 
-    st.stop()
+            db.collection("users").document(user.uid).set({
+                "name": signup_name,
+                "email": signup_email
+            })
 
-# ------------------- LOGGED-IN USER -------------------
-st.success(f"Logged in as {st.session_state.user}")
+            st.success("Signup successful! You can now login.")
+        except Exception as e:
+            st.error(str(e))
 
-if st.button("Logout"):
-    st.session_state.user = None
-    st.session_state.uid = None
-    st.rerun()
-
-st.divider()
-
-# ------------------- BRANCH → ROLE → SKILLS -------------------
-BRANCH_ROLE_SKILLS = {
-    "CSE": {
-        "Python Developer": ["python", "oops", "git", "api", "django"],
-        "Data Scientist": ["python", "statistics", "ml", "sql", "pandas"],
-        "Web Developer": ["html", "css", "javascript", "react", "api"]
-    },
-    "ECE": {
-        "Embedded Engineer": ["c", "c++", "microcontroller", "iot"],
-        "IoT Engineer": ["iot", "arduino", "raspberry pi", "sensors"]
-    },
-    "MECH": {
-        "Design Engineer": ["autocad", "solidworks", "gd&t"],
-        "Manufacturing Engineer": ["cnc", "manufacturing", "quality"]
-    }
-}
-
-branch = st.selectbox("Select Branch", BRANCH_ROLE_SKILLS.keys())
-role = st.selectbox("Select Job Role", BRANCH_ROLE_SKILLS[branch].keys())
-resume = st.file_uploader("Upload Resume (PDF or TXT)", type=["pdf", "txt"])
-
-# ------------------- ANALYZE RESUME -------------------
-if st.button("Analyze Resume"):
-    if resume is None:
-        st.error("❌ Please upload a resume")
-        st.stop()
-
-    resume_text = resume.read().decode("utf-8", errors="ignore").lower()
-    required_skills = BRANCH_ROLE_SKILLS[branch][role]
-
-    ats, level, matched, missing = calculate_ats(
-        resume_text,
-        required_skills
-    )
-
-    st.subheader("📊 ATS Result")
-    st.metric("ATS Score", f"{ats}%")
-    st.write("Level:", level)
-
-    st.success("✅ Matched Skills")
-    st.write(matched if matched else "None")
-
-    st.error("❌ Missing Skills")
-    st.write(missing if missing else "None")
-
-    st.subheader("🤖 AI Suggestions")
-    st.markdown(ai_feedback(role, level, missing))
-
-    st.subheader("✍ Resume Rewrite")
-    st.markdown(rewrite_resume(role, missing))
-
-    # Save ATS Result
-    db.collection("ats_results").add({
-        "uid": st.session_state.uid,
-        "name": st.session_state.user,
-        "branch": branch,
-        "role": role,
-        "ats_score": ats,
-        "level": level,
-        "matched_skills": matched,
-        "missing_skills": missing,
-        "created_at": datetime.utcnow()
-    })
-    st.success("📁 Results saved to Firebase")
+# ---------------- AFTER LOGIN ---------------- #
+if "user" in st.session_state:
+    st.success(f"Logged in as {st.session_state['user']}")
+    st.write("🎯 Resume Analyzer features will appear here.")
