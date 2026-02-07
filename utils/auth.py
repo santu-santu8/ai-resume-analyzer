@@ -1,29 +1,27 @@
 import pyrebase
+import os
 
-# Replace with your Firebase project settings
 config = {
-    "apiKey": "YOUR_API_KEY",
-    "authDomain": "YOUR_PROJECT.firebaseapp.com",
-    "databaseURL": "",
-    "projectId": "YOUR_PROJECT_ID",
-    "storageBucket": "",
-    "messagingSenderId": "YOUR_SENDER_ID",
-    "appId": "YOUR_APP_ID"
+    "apiKey": os.getenv("FIREBASE_API_KEY"),
+    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
 }
 
 firebase = pyrebase.initialize_app(config)
 auth_client = firebase.auth()
 
-def signup_user(email, password):
+
+def signup_user(name, email, password):
     try:
         user = auth_client.create_user_with_email_and_password(email, password)
-        return {"success": True, "uid": user['localId']}
+        return True, user
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return False, str(e)
+
 
 def login_user(email, password):
     try:
         user = auth_client.sign_in_with_email_and_password(email, password)
-        return {"success": True, "uid": user['localId']}
+        return True, user
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return False, str(e)

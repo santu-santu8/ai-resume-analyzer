@@ -1,5 +1,26 @@
-def calculate_ats(resume_text, required_skills):
+BRANCH_DATA = {
+    "Computer Science": {
+        "Software Engineer": [
+            "python", "java", "data structures", "algorithms",
+            "git", "sql", "oop"
+        ],
+        "Data Scientist": [
+            "python", "machine learning", "statistics",
+            "pandas", "numpy", "sql"
+        ]
+    },
+    "Electronics": {
+        "Embedded Engineer": [
+            "c", "c++", "microcontrollers",
+            "embedded systems", "rtos"
+        ]
+    }
+}
+
+
+def calculate_ats(resume_text, branch, role):
     resume_text = resume_text.lower()
+    required_skills = BRANCH_DATA[branch][role]
 
     matched = []
     missing = []
@@ -12,11 +33,11 @@ def calculate_ats(resume_text, required_skills):
 
     ats_score = int((len(matched) / len(required_skills)) * 100)
 
-    if ats_score > 80:
+    if ats_score >= 80:
         level = "Strong"
-    elif ats_score > 50:
+    elif ats_score >= 50:
         level = "Medium"
     else:
         level = "Poor"
 
-    return ats_score, level, matched, missing
+    return ats_score, missing, level

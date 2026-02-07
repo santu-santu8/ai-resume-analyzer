@@ -6,9 +6,9 @@ def ai_feedback(role, level, missing_skills):
         for skill in missing_skills:
             feedback += f"- Learn and practice **{skill}**\n"
 
-    feedback += "\n### AI Career Advice:\n"
+    feedback += "\n### Industry Tips:\n"
     feedback += "- Build 2–3 real-world projects\n"
     feedback += "- Add measurable achievements\n"
-    feedback += "- Optimize resume for keywords\n"
+    feedback += "- Optimize resume keywords\n"
 
     return feedback

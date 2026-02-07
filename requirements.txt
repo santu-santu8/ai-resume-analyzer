@@ -1,13 +1,8 @@
 streamlit
+pyrebase4
+firebase-admin
+python-dotenv
 PyPDF2
-nltk
-spacy
-scikit-learn
 pandas
 numpy
-matplotlib
-firebase-admin
-openai
-python-dotenv
-Pillow
-pyrebase4
+scikit-learn

@@ -1,6 +1,7 @@
-import os
 import firebase_admin
 from firebase_admin import credentials, firestore
+import os
+
 
 def init_firebase():
     if not firebase_admin._apps:
@@ -16,7 +17,6 @@ def init_firebase():
             "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_CERT_URL"),
             "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_CERT_URL"),
         })
-
         firebase_admin.initialize_app(cred)
 
     return firestore.client()
